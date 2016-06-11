@@ -48,7 +48,7 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	locationURL := fmt.Sprintf("http://localhost:1339/drivers/%d", driverID)
+	locationURL := fmt.Sprintf("http://localhost:8001/drivers/%d", driverID)
 	locations, err := getDriverLocations(breaker, locationURL)
 	if err != nil {
 		log.Printf(err.Error())
