@@ -2,12 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/rubyist/circuitbreaker"
 )
+
+var breaker = circuit.NewConsecutiveBreaker(5)
 
 // DriverLocation models response from LocationService
 type DriverLocation struct {
@@ -43,11 +48,10 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	locations, err := getDriverLocations(driverID)
+	locationURL := fmt.Sprintf("http://localhost:1339/drivers/%d", driverID)
+	locations, err := getDriverLocations(breaker, locationURL)
 	if err != nil {
-		// TODO add circuit breaker system
-		log.Printf("Could not retrieve driver's locations.")
+		log.Printf(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -58,7 +62,7 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	response, err := json.Marshal(result)
 	if err != nil {
-		log.Printf("Could not json encode response.")
+		log.Printf(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -67,19 +71,36 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func getDriverLocations(id int) ([]*DriverLocation, error) {
-	return []*DriverLocation{
-		&DriverLocation{
-			Latitude:  42,
-			Longitude: 2.3,
-			UpdatedAt: "2016-06-10T19:43:22.232Z",
-		},
-		&DriverLocation{
-			Latitude:  42,
-			Longitude: 2.3,
-			UpdatedAt: "2016-06-10T19:43:22.232Z",
-		},
-	}, nil
+func getDriverLocations(breaker *circuit.Breaker, serviceURL string) ([]*DriverLocation, error) {
+	// return []*DriverLocation{
+	// 	&DriverLocation{
+	// 		Latitude:  42,
+	// 		Longitude: 2.3,
+	// 		UpdatedAt: "2016-06-10T19:43:22.232Z",
+	// 	},
+	// 	&DriverLocation{
+	// 		Latitude:  42,
+	// 		Longitude: 2.3,
+	// 		UpdatedAt: "2016-06-10T19:43:22.232Z",
+	// 	},
+	// }, nil
+	var response *http.Response
+	var err error
+	err = breaker.Call(func() error {
+		var httpErr error
+		response, httpErr = http.Get(serviceURL)
+		return httpErr
+	}, time.Second*1)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	decoder := json.NewDecoder(response.Body)
+	var locations []*DriverLocation
+	if err := decoder.Decode(&locations); err != nil {
+		return nil, err
+	}
+	return locations, nil
 }
 
 func isDriverZombie(locations []*DriverLocation) bool {
