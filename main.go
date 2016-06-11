@@ -103,6 +103,19 @@ func getDriverLocations(breaker *circuit.Breaker, serviceURL string) ([]*DriverL
 	return locations, nil
 }
 
+//isDriverZombie
 func isDriverZombie(locations []*DriverLocation) bool {
+	var meters float64
+	var prev DriverLocation
+	for _, loc := range locations {
+		if prev.UpdatedAt != "" {
+			meters = Distance(prev.Latitude, prev.Longitude, loc.Latitude, loc.Longitude) + meters
+		}
+		prev.Latitude = loc.Latitude
+		prev.Longitude = loc.Longitude
+	}
+	if meters > 500 {
+		return true
+	}
 	return false
 }
