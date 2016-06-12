@@ -48,7 +48,7 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	locationURL := fmt.Sprintf("http://localhost:8001/drivers/%d", driverID)
+	locationURL := fmt.Sprintf("http://172.17.0.1:8001/drivers/%d/coordinates?minutes=5", driverID)
 	locations, err := getDriverLocations(breaker, locationURL)
 	if err != nil {
 		log.Printf(err.Error())
@@ -57,7 +57,6 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isZombie := isDriverZombie(locations)
-
 	result := APIResponse{ID: driverID, Zombie: isZombie}
 	w.Header().Set("Content-Type", "application/json")
 	response, err := json.Marshal(result)
@@ -72,18 +71,6 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getDriverLocations(breaker *circuit.Breaker, serviceURL string) ([]*DriverLocation, error) {
-	// return []*DriverLocation{
-	// 	&DriverLocation{
-	// 		Latitude:  42,
-	// 		Longitude: 2.3,
-	// 		UpdatedAt: "2016-06-10T19:43:22.232Z",
-	// 	},
-	// 	&DriverLocation{
-	// 		Latitude:  42,
-	// 		Longitude: 2.3,
-	// 		UpdatedAt: "2016-06-10T19:43:22.232Z",
-	// 	},
-	// }, nil
 	var response *http.Response
 	var err error
 	err = breaker.Call(func() error {
@@ -115,7 +102,7 @@ func isDriverZombie(locations []*DriverLocation) bool {
 		prev.Longitude = loc.Longitude
 	}
 
-	if meters > 500 {
+	if meters < 500 {
 		return true
 	}
 	return false

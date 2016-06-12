@@ -16,7 +16,7 @@ func TestAlgo(t *testing.T) {
 }
 
 //TestisDriverZombie check that our methods does well the sum of distance
-func TestIsZombie(t *testing.T) {
+func TestIsZombieShouldReturnNotZombieForParisNiceParis(t *testing.T) {
 	var locations = []*DriverLocation{
 		&DriverLocation{
 			Latitude:  48.8566,
@@ -31,6 +31,41 @@ func TestIsZombie(t *testing.T) {
 		&DriverLocation{
 			Latitude:  48.8566,
 			Longitude: 2.3522,
+			UpdatedAt: "",
+		},
+	}
+	r := isDriverZombie(locations)
+
+	if r == true {
+		t.Fail()
+	}
+}
+
+func TestIsZombieShouldReturnIsZombieForSingleLocation(t *testing.T) {
+	var locations = []*DriverLocation{
+		&DriverLocation{
+			Latitude:  48.8566,
+			Longitude: 2.3522,
+			UpdatedAt: "",
+		},
+	}
+	r := isDriverZombie(locations)
+
+	if r == false {
+		t.Fail()
+	}
+}
+
+func TestIsZombieShouldReturnIsZombieForTwoLocationsApartLessThan500m(t *testing.T) {
+	var locations = []*DriverLocation{
+		&DriverLocation{
+			Latitude:  48.8566,
+			Longitude: 2.3522,
+			UpdatedAt: "",
+		},
+		&DriverLocation{
+			Latitude:  48.8566,
+			Longitude: 2.3523,
 			UpdatedAt: "",
 		},
 	}
