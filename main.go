@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	consul "github.com/hashicorp/consul/api"
 	"github.com/rubyist/circuitbreaker"
 )
 
@@ -28,11 +29,32 @@ type APIResponse struct {
 }
 
 func main() {
+	consulConfig := consul.DefaultConfig()
+	consulClient, err := consul.NewClient(consulConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = Register(consulClient, "zombie", "172.17.0.1", 1338)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	r := mux.NewRouter().StrictSlash(true)
 	r.HandleFunc("/drivers/{id:[0-9]+}", ZombieDriverHandler).Methods("GET")
 	http.Handle("/", r)
 	log.Printf("Server started and listening on port %d.", 1338)
 	log.Fatal(http.ListenAndServe(":1338", nil))
+}
+
+// Register a service with consul local agent
+func Register(client *consul.Client, name, address string, port int) error {
+	reg := &consul.AgentServiceRegistration{
+		ID:      name,
+		Name:    name,
+		Address: address,
+		Port:    port,
+	}
+	return client.Agent().ServiceRegister(reg)
 }
 
 // ZombieDriverHandler handles a user's request to know if a driver is active
