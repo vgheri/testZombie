@@ -14,6 +14,7 @@ import (
 )
 
 var breaker = circuit.NewConsecutiveBreaker(5)
+var consulClient *consul.Client
 
 // DriverLocation models response from LocationService
 type DriverLocation struct {
@@ -29,12 +30,11 @@ type APIResponse struct {
 }
 
 func main() {
-	consulConfig := consul.DefaultConfig()
-	consulClient, err := consul.NewClient(consulConfig)
-	if err != nil {
+	var err error
+	if consulClient, err = initConsul(); err != nil {
 		log.Fatal(err)
 	}
-	err = Register(consulClient, "zombie", "172.17.0.1", 1338)
+	err = register(consulClient, "zombie", "172.17.0.1", 1338)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,18 +43,8 @@ func main() {
 	r.HandleFunc("/drivers/{id:[0-9]+}", ZombieDriverHandler).Methods("GET")
 	http.Handle("/", r)
 	log.Printf("Server started and listening on port %d.", 1338)
-	log.Fatal(http.ListenAndServe(":1338", nil))
-}
-
-// Register a service with consul local agent
-func Register(client *consul.Client, name, address string, port int) error {
-	reg := &consul.AgentServiceRegistration{
-		ID:      name,
-		Name:    name,
-		Address: address,
-		Port:    port,
-	}
-	return client.Agent().ServiceRegister(reg)
+	log.Println(http.ListenAndServe(":1338", nil))
+	unregister(consulClient, "zombie")
 }
 
 // ZombieDriverHandler handles a user's request to know if a driver is active
@@ -70,11 +60,18 @@ func ZombieDriverHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	locationURL := fmt.Sprintf("http://172.17.0.1:8001/drivers/%d/coordinates?minutes=5", driverID)
+
+	baseAddr, err := retrieveLocationServiceAddress(consulClient)
+	if err != nil {
+		log.Printf(err.Error())
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	locationURL := fmt.Sprintf("http://%s/drivers/%d/coordinates?minutes=5", baseAddr, driverID)
 	locations, err := getDriverLocations(breaker, locationURL)
 	if err != nil {
 		log.Printf(err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
@@ -128,4 +125,8 @@ func isDriverZombie(locations []*DriverLocation) bool {
 		return true
 	}
 	return false
+}
+
+func retrieveLocationServiceAddress(client *consul.Client) (string, error) {
+	return service(consulClient, "location", "")
 }
